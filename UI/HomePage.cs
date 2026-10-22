@@ -1,12 +1,19 @@
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace scrlog.UI
 {
-    public class HomePage : UserControl
+    public class HomePage : Page
     {
+        private static readonly string[] StatusTexts = { "Идёт запись", "Запись остановлена", "Ошибка записи" };
+        private static readonly int StatusHeight = Theme.S(222);
+        private static readonly int BottomHeight = Theme.S(140);
+        private static readonly int MachineTextX = Theme.S(100);
+        private static readonly int SpinWidth = Theme.S(76);
+
         private readonly AppSettings _settings;
         private readonly Recorder _recorder;
         private readonly RecordingScheduler _scheduler;
@@ -21,8 +28,11 @@ namespace scrlog.UI
         private readonly Label _elapsed = Theme.MakeLabel("00:00:00", Theme.Font(17f, FontStyle.Bold), Theme.Text);
         private readonly Label _fileText = Theme.MakeLabel("", Theme.Semibold(10f), Theme.Text);
         private readonly FlatCheckBox _scheduleEnabled = new FlatCheckBox("Автозапуск по расписанию");
+        private readonly Label _keepLabel = Theme.MakeLabel("Хранить видео", Theme.Font(10.5f), Theme.Label);
         private readonly SpinBox _retention = new SpinBox { Minimum = 1, Maximum = 365 };
+        private readonly Label _daysLabel = Theme.MakeLabel("дней", Theme.Font(10.5f), Theme.Label);
 
+        private readonly Label _monitor = Theme.MakeLabel(Theme.Glyph.Monitor, Theme.Icon(36f), Theme.Text);
         private readonly KeyValueLabel _pcName = new KeyValueLabel("PC");
         private readonly KeyValueLabel _resolution = new KeyValueLabel("Разрешение");
         private readonly KeyValueLabel _quality = new KeyValueLabel("Качество");
@@ -30,9 +40,16 @@ namespace scrlog.UI
 
         private readonly SpinBox _start = SpinBox.ForTime();
         private readonly SpinBox _end = SpinBox.ForTime();
+        private Label _startLabel;
+        private Label _endLabel;
 
         private readonly InputBox _localFolder = new InputBox();
         private readonly InputBox _networkFolder = new InputBox();
+        private readonly IconButton _browseLocal = new IconButton(Theme.Glyph.Folder);
+        private readonly IconButton _browseNetwork = new IconButton(Theme.Glyph.Folder);
+        private Label _localLabel;
+        private Label _networkLabel;
+
         private readonly ToolTip _toolTip = new ToolTip();
         private readonly Timer _timer = new Timer { Interval = 500 };
         private bool _busy;
@@ -42,9 +59,6 @@ namespace scrlog.UI
             _settings = settings;
             _recorder = recorder;
             _scheduler = scheduler;
-
-            BackColor = Theme.Background;
-            DoubleBuffered = true;
 
             BuildStatusCard();
             BuildScheduleCard();
@@ -68,52 +82,36 @@ namespace scrlog.UI
             _dot.SetBounds(Theme.S(16), Theme.S(42), Theme.S(26), Theme.S(26));
             _statusText.Location = new Point(Theme.S(50), Theme.S(38));
             _elapsed.Location = new Point(Theme.S(50), Theme.S(66));
-            _fileText.Location = new Point(Theme.S(52), Theme.S(100));
             _fileText.AutoSize = false;
             _fileText.AutoEllipsis = true;
-
             _scheduleEnabled.Location = new Point(Theme.S(16), Theme.S(140));
+            _keepLabel.Left = Theme.S(14);
+
             _scheduleEnabled.CheckedChanged += (s, e) =>
             {
                 _settings.ScheduleEnabled = _scheduleEnabled.Checked;
                 _settings.Save();
                 RefreshStatus();
             };
-
-            var keep = Theme.MakeLabel("Хранить видео", Theme.Font(10.5f), Theme.Label);
-            keep.Location = new Point(Theme.S(14), Theme.S(181));
-            _retention.SetBounds(Theme.S(122), Theme.S(174), Theme.S(70), Theme.S(32));
-            _retention.Formatter = v => v.ToString();
             _retention.ValueChanged += (s, e) =>
             {
                 _settings.RetentionDays = _retention.ValueInt;
                 _settings.Save();
             };
-            var days = Theme.MakeLabel("дней", Theme.Font(10.5f), Theme.Label);
-            days.Location = new Point(Theme.S(198), Theme.S(181));
 
-            c.Controls.AddRange(new Control[] { _dot, _statusText, _elapsed, _fileText, _scheduleEnabled, keep, _retention, days, _machineCard });
+            c.Controls.AddRange(new Control[] { _dot, _statusText, _elapsed, _fileText, _scheduleEnabled, _keepLabel, _retention, _daysLabel, _machineCard });
 
-            var m = _machineCard;
-            var monitor = Theme.MakeLabel(Theme.Glyph.Monitor, Theme.Icon(36f), Theme.Text);
-            monitor.Location = new Point(Theme.S(22), Theme.S(28));
-            _pcName.SetBounds(Theme.S(106), Theme.S(36), Theme.S(170), Theme.S(22));
-            _resolution.SetBounds(Theme.S(106), Theme.S(58), Theme.S(170), Theme.S(22));
-            _quality.SetBounds(Theme.S(106), Theme.S(80), Theme.S(170), Theme.S(22));
+            _monitor.Location = new Point(Theme.S(20), Theme.S(28));
             _toggle.Click += async (s, e) => await ToggleRecording();
-            m.Controls.AddRange(new Control[] { monitor, _pcName, _resolution, _quality, _toggle });
+            _machineCard.Controls.AddRange(new Control[] { _monitor, _pcName, _resolution, _quality, _toggle });
         }
 
         private void BuildScheduleCard()
         {
             var c = _scheduleCard;
             c.AddTitle("Расписание");
-
-            AddRow(c, "Начало записи", _start, Theme.S(50));
-            AddRow(c, "Конец записи", _end, Theme.S(90));
-            _start.SetBounds(Theme.S(118), Theme.S(50), Theme.S(74), Theme.S(32));
-            _end.SetBounds(Theme.S(118), Theme.S(90), Theme.S(74), Theme.S(32));
-
+            _startLabel = AddRow(c, "Начало записи", _start);
+            _endLabel = AddRow(c, "Конец записи", _end);
             _start.ValueChanged += (s, e) => SaveSchedule();
             _end.ValueChanged += (s, e) => SaveSchedule();
         }
@@ -122,9 +120,8 @@ namespace scrlog.UI
         {
             var c = _storageCard;
             c.AddTitle("Сохранение видео");
-
-            AddRow(c, "Локальная папка", _localFolder, Theme.S(50));
-            AddRow(c, "Сетевая папка", _networkFolder, Theme.S(90));
+            _localLabel = AddRow(c, "Локальная папка", _localFolder);
+            _networkLabel = AddRow(c, "Сетевая папка", _networkFolder);
 
             _localFolder.Committed += (s, e) =>
             {
@@ -147,31 +144,12 @@ namespace scrlog.UI
                 Task.Run(() => _scheduler.RunMaintenance());
             };
 
-            var browseLocal = new IconButton(Theme.Glyph.Folder) { Tag = _localFolder };
-            var browseNetwork = new IconButton(Theme.Glyph.Folder) { Tag = _networkFolder };
-            browseLocal.Click += Browse;
-            browseNetwork.Click += Browse;
-            c.Controls.Add(browseLocal);
-            c.Controls.Add(browseNetwork);
-
-            c.Resize += (s, e) =>
-            {
-                int btn = Theme.S(32);
-                int x = Theme.S(136);
-                int right = c.Width - Theme.S(16);
-                browseLocal.SetBounds(right - btn, Theme.S(50), btn, btn);
-                browseNetwork.SetBounds(right - btn, Theme.S(90), btn, btn);
-                _localFolder.SetBounds(x, Theme.S(50), right - btn - Theme.S(8) - x, btn);
-                _networkFolder.SetBounds(x, Theme.S(90), right - btn - Theme.S(8) - x, btn);
-            };
-        }
-
-        private static void AddRow(Card card, string label, Control input, int y)
-        {
-            var l = Theme.MakeLabel(label, Theme.Font(10.5f), Theme.Label);
-            l.Location = new Point(Theme.S(14), y + Theme.S(7));
-            card.Controls.Add(l);
-            card.Controls.Add(input);
+            _browseLocal.Tag = _localFolder;
+            _browseNetwork.Tag = _networkFolder;
+            _browseLocal.Click += Browse;
+            _browseNetwork.Click += Browse;
+            c.Controls.Add(_browseLocal);
+            c.Controls.Add(_browseNetwork);
         }
 
         private void Browse(object sender, EventArgs e)
@@ -239,20 +217,20 @@ namespace scrlog.UI
             {
                 _dot.DotColor = Theme.Green;
                 _statusText.ForeColor = Theme.Green;
-                _statusText.Text = "Идёт запись";
+                _statusText.Text = StatusTexts[0];
                 var elapsed = _recorder.Elapsed;
                 _elapsed.Text = $"{(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
                 var file = _recorder.CurrentFile;
-                _fileText.Text = file != null ? $"Файл: {file}" : "Файл: создаётся…";
+                SetFileText(file != null ? $"Файл: {file}" : "Файл: создаётся…");
             }
             else
             {
                 bool error = _recorder.LastError != null;
                 _dot.DotColor = error ? Theme.Red : Theme.Gray;
                 _statusText.ForeColor = error ? Theme.Red : Theme.Muted;
-                _statusText.Text = error ? "Ошибка записи" : "Запись остановлена";
+                _statusText.Text = error ? StatusTexts[2] : StatusTexts[1];
                 _elapsed.Text = "00:00:00";
-                _fileText.Text = error ? _recorder.LastError : NextRunText();
+                SetFileText(error ? _recorder.LastError : NextRunText());
             }
 
             if (!_busy)
@@ -272,6 +250,14 @@ namespace scrlog.UI
             _toolTip.SetToolTip(_networkFolder, networkDown ? "Сетевая папка недоступна — файлы будут скопированы позже" : null);
         }
 
+        private void SetFileText(string text)
+        {
+            if (_fileText.Text == text) return;
+            _fileText.Text = text;
+            // Строка может обрезаться многоточием в узком окне — полный текст в подсказке
+            _toolTip.SetToolTip(_fileText, text);
+        }
+
         private string NextRunText()
         {
             if (!_settings.ScheduleEnabled)
@@ -283,23 +269,80 @@ namespace scrlog.UI
             return $"Следующий запуск: {day} в {AppSettings.FormatTime(_settings.StartTime)}";
         }
 
+        // ---------- Раскладка ----------
+
+        private int RetentionX => _keepLabel.Left + TextWidth(_keepLabel) + Theme.S(8);
+
+        private int DaysX => RetentionX + Theme.S(70) + Theme.S(8);
+
+        /// <summary>Ширина левой части карточки «Статус» (до блока с ПК).</summary>
+        private int StatusLeftWidth => new[]
+        {
+            _statusText.Left + StatusTexts.Max(t => TextWidth(t, _statusText.Font)),
+            _elapsed.Left + TextWidth("000:00:00", _elapsed.Font),
+            _scheduleEnabled.Right,
+            DaysX + TextWidth(_daysLabel),
+            Theme.S(52) + Theme.S(180) // строка «Файл: …» дальше ужимается с многоточием
+        }.Max() + Theme.S(16);
+
+        private int ToggleWidth =>
+            TextWidth("Остановить запись", _toggle.Font) + TextWidth(Theme.Glyph.Stop, Theme.Icon(_toggle.GlyphSize)) + Theme.S(14 + 36);
+
+        private int MachineMinWidth => Math.Max(
+            MachineTextX + Math.Max(_resolution.TextWidth, _quality.TextWidth) + Theme.S(14),
+            ToggleWidth + Theme.S(40));
+
+        private int MachinePreferredWidth => Math.Max(MachineMinWidth,
+            Math.Min(Theme.S(360), Math.Max(Theme.S(290), MachineTextX + _pcName.TextWidth + Theme.S(14))));
+
+        private int ScheduleInputX => InputColumn(_startLabel, _endLabel);
+
+        private int ScheduleWidth => Math.Max(ScheduleInputX + SpinWidth, Theme.S(16) + TextWidth("Расписание", Theme.Semibold(11f))) + Theme.S(16);
+
+        private int StorageInputX => InputColumn(_localLabel, _networkLabel);
+
+        private int StorageMinWidth => StorageInputX + Theme.S(140) + Theme.S(8) + RowHeight + Theme.S(16);
+
+        public override int MinimumContentWidth => Pad * 2 + Math.Max(
+            StatusLeftWidth + MachineMinWidth + Theme.S(14),
+            ScheduleWidth + Gap + StorageMinWidth);
+
+        public override int MinimumContentHeight => ContentTop + StatusHeight + Gap + BottomHeight + Pad;
+
         protected override void OnLayout(LayoutEventArgs e)
         {
             base.OnLayout(e);
-            int pad = Theme.S(24);
-            int gap = Theme.S(12);
-            int width = ClientSize.Width - pad * 2;
+            int width = ClientSize.Width - Pad * 2;
 
-            _statusCard.SetBounds(pad, Theme.S(22), width, Theme.S(222));
-            int machineWidth = Theme.S(290);
-            _machineCard.SetBounds(_statusCard.Width - machineWidth - Theme.S(14), Theme.S(14), machineWidth, _statusCard.Height - Theme.S(28));
+            // Статус: блок с ПК справа сжимается до минимума, левая часть не перекрывается
+            _statusCard.SetBounds(Pad, ContentTop, width, StatusHeight);
+            int machineWidth = Math.Max(MachineMinWidth, Math.Min(MachinePreferredWidth, width - StatusLeftWidth - Theme.S(14)));
+            _machineCard.SetBounds(width - machineWidth - Theme.S(14), Theme.S(14), machineWidth, StatusHeight - Theme.S(28));
+            int kvWidth = machineWidth - MachineTextX - Theme.S(12);
+            _pcName.SetBounds(MachineTextX, Theme.S(36), kvWidth, Theme.S(22));
+            _resolution.SetBounds(MachineTextX, Theme.S(58), kvWidth, Theme.S(22));
+            _quality.SetBounds(MachineTextX, Theme.S(80), kvWidth, Theme.S(22));
             _toggle.SetBounds(Theme.S(20), _machineCard.Height - Theme.S(62), machineWidth - Theme.S(40), Theme.S(44));
-            _fileText.SetBounds(_fileText.Left, _fileText.Top, _machineCard.Left - _fileText.Left - Theme.S(12), Theme.S(22));
 
-            int top = _statusCard.Bottom + gap;
-            int scheduleWidth = Theme.S(202);
-            _scheduleCard.SetBounds(pad, top, scheduleWidth, Theme.S(140));
-            _storageCard.SetBounds(pad + scheduleWidth + gap, top, width - scheduleWidth - gap, Theme.S(140));
+            _fileText.SetBounds(Theme.S(52), Theme.S(100), Math.Max(0, _machineCard.Left - Theme.S(52) - Theme.S(12)), Theme.S(22));
+            PlaceRow(_keepLabel, _retention, RetentionX, Theme.S(174), Theme.S(70));
+            _daysLabel.Location = new Point(DaysX, _keepLabel.Top);
+
+            // Нижний ряд: расписание по содержимому, папки забирают остальное
+            int top = _statusCard.Bottom + Gap;
+            int scheduleWidth = ScheduleWidth;
+            _scheduleCard.SetBounds(Pad, top, scheduleWidth, BottomHeight);
+            PlaceRow(_startLabel, _start, ScheduleInputX, Theme.S(50), SpinWidth);
+            PlaceRow(_endLabel, _end, ScheduleInputX, Theme.S(90), SpinWidth);
+
+            _storageCard.SetBounds(Pad + scheduleWidth + Gap, top, width - scheduleWidth - Gap, BottomHeight);
+            int x = StorageInputX;
+            int right = _storageCard.Width - Theme.S(16);
+            int pathWidth = right - RowHeight - Theme.S(8) - x;
+            PlaceRow(_localLabel, _localFolder, x, Theme.S(50), pathWidth);
+            PlaceRow(_networkLabel, _networkFolder, x, Theme.S(90), pathWidth);
+            _browseLocal.SetBounds(right - RowHeight, Theme.S(50), RowHeight, RowHeight);
+            _browseNetwork.SetBounds(right - RowHeight, Theme.S(90), RowHeight, RowHeight);
         }
 
         protected override void Dispose(bool disposing)

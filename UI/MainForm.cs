@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -17,7 +18,7 @@ namespace scrlog.UI
         private readonly Panel _sidebar = new Panel { Dock = DockStyle.Left, BackColor = Theme.Sidebar };
         private readonly Panel _content = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
         private readonly NavButton[] _nav;
-        private readonly Control[] _pages;
+        private readonly Page[] _pages;
         private readonly HomePage _home;
 
         private readonly NotifyIcon _tray = new NotifyIcon();
@@ -41,7 +42,6 @@ namespace scrlog.UI
             BackColor = Theme.Background;
             StartPosition = FormStartPosition.CenterScreen;
             ClientSize = new Size(Theme.S(860), Theme.S(540));
-            MinimumSize = SizeFromClientSize(new Size(Theme.S(780), Theme.S(500)));
 
             _appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application;
             _idleIcon = MakeIdleIcon(_appIcon);
@@ -50,8 +50,12 @@ namespace scrlog.UI
             _home = new HomePage(settings, recorder, scheduler);
             var journal = new JournalPage(settings);
             var settingsPage = new SettingsPage(settings);
-            settingsPage.SettingsChanged += () => _home.RefreshStatus();
-            _pages = new Control[] { _home, journal, settingsPage };
+            settingsPage.SettingsChanged += () =>
+            {
+                _home.RefreshStatus();
+                ApplyMinimumSize();
+            };
+            _pages = new Page[] { _home, journal, settingsPage };
             foreach (var page in _pages)
             {
                 page.Dock = DockStyle.Fill;
@@ -87,9 +91,21 @@ namespace scrlog.UI
             Controls.Add(_content);
             Controls.Add(_sidebar);
             ShowPage(0);
+            ApplyMinimumSize();
 
             BuildTray();
             _recorder.StateChanged += OnRecorderStateChanged;
+        }
+
+        /// <summary>Не даём сжать окно так, чтобы элементы страниц начали перекрываться.</summary>
+        private void ApplyMinimumSize()
+        {
+            var min = new Size(
+                _sidebar.Width + _pages.Max(p => p.MinimumContentWidth),
+                Math.Max(Theme.S(460), _pages.Max(p => p.MinimumContentHeight)));
+            MinimumSize = SizeFromClientSize(min);
+            if (ClientSize.Width < min.Width || ClientSize.Height < min.Height)
+                ClientSize = new Size(Math.Max(ClientSize.Width, min.Width), Math.Max(ClientSize.Height, min.Height));
         }
 
         private void ShowPage(int index)

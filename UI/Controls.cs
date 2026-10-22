@@ -481,6 +481,17 @@ namespace scrlog.UI
             set { _value = value; Invalidate(); }
         }
 
+        /// <summary>Ширина, при которой строка помещается без многоточия.</summary>
+        public int TextWidth
+        {
+            get
+            {
+                var flags = TextFormatFlags.NoPadding | TextFormatFlags.SingleLine;
+                return TextRenderer.MeasureText(_key, Font, Size.Empty, flags).Width +
+                       TextRenderer.MeasureText(_value ?? "", Theme.Semibold(11f), Size.Empty, flags).Width + Theme.S(2);
+            }
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             var flags = TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;

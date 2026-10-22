@@ -9,7 +9,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\scrlog.ico</ApplicationIcon>
 
-    <Version>2.0.0</Version>
+    <Version>2.0.1</Version>
     <Product>Scrlog</Product>
     <AssemblyTitle>Scrlog</AssemblyTitle>
     <Description>Запись экрана по расписанию</Description>

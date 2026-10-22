@@ -2,12 +2,17 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace scrlog.UI
 {
-    public class SettingsPage : UserControl
+    public class SettingsPage : Page
     {
+        private const string AutostartHintText = "Включено установщиком для всех пользователей";
+        private const string FfmpegMissingText = "ffmpeg: не найден — запись невозможна";
+        private static readonly int RowStep = Theme.S(42);
+
         private readonly AppSettings _settings;
 
         private readonly Card _recordCard = new Card();
@@ -24,6 +29,10 @@ namespace scrlog.UI
         private readonly Label _qualityHint = Theme.MakeLabel("", Theme.Font(9f), Theme.Muted);
         private readonly SpinBox _fps = new SpinBox { Minimum = 1, Maximum = 30 };
         private readonly SpinBox _segment = new SpinBox { Minimum = 1, Maximum = 240, Increment = 5 };
+        private Label _pcNameLabel;
+        private Label _qualityLabel;
+        private Label _fpsLabel;
+        private Label _segmentLabel;
         private readonly FlatCheckBox _clicks = new FlatCheckBox("Подсвечивать клики мыши");
         private readonly Label _applyHint = Theme.MakeLabel("Качество, частота кадров и длина файла применяются при следующем запуске записи.",
             Theme.Font(9f), Theme.Muted);
@@ -40,7 +49,8 @@ namespace scrlog.UI
         public SettingsPage(AppSettings settings)
         {
             _settings = settings;
-            BackColor = Theme.Background;
+            // Если окно ниже содержимого, страница прокручивается, а не обрезается
+            AutoScroll = true;
 
             BuildRecordCard();
             BuildAppCard();
@@ -63,20 +73,14 @@ namespace scrlog.UI
             var c = _recordCard;
             c.AddTitle("Запись");
 
-            AddRow(c, "Имя ПК", _pcName, 50);
-            AddRow(c, "Качество", _quality, 92);
-            AddRow(c, "Кадров в секунду", _fps, 134);
-            AddRow(c, "Длина файла, мин", _segment, 176);
+            _pcNameLabel = AddRow(c, "Имя ПК", _pcName);
+            _qualityLabel = AddRow(c, "Качество", _quality);
+            _fpsLabel = AddRow(c, "Кадров в секунду", _fps);
+            _segmentLabel = AddRow(c, "Длина файла, мин", _segment);
 
-            _qualityHint.Location = new Point(Theme.S(340), Theme.S(99));
-            _clicks.Location = new Point(Theme.S(16), Theme.S(220));
-            _applyHint.Location = new Point(Theme.S(16), Theme.S(252));
+            _clicks.Location = new Point(Theme.S(16), Theme.S(50) + RowStep * 4);
+            _applyHint.Location = new Point(Theme.S(16), _clicks.Bottom + Theme.S(10));
             c.Controls.AddRange(new Control[] { _qualityHint, _clicks, _applyHint });
-
-            _pcName.SetBounds(Theme.S(150), Theme.S(50), Theme.S(260), Theme.S(32));
-            _quality.SetBounds(Theme.S(150), Theme.S(94), Theme.S(180), Theme.S(32));
-            _fps.SetBounds(Theme.S(150), Theme.S(134), Theme.S(74), Theme.S(32));
-            _segment.SetBounds(Theme.S(150), Theme.S(176), Theme.S(74), Theme.S(32));
 
             foreach (VideoQuality q in Enum.GetValues(typeof(VideoQuality)))
                 _quality.Items.Add(QualityName(q));
@@ -107,7 +111,7 @@ namespace scrlog.UI
             _tray.Location = new Point(Theme.S(16), Theme.S(50));
             _autostart.Location = new Point(Theme.S(16), Theme.S(80));
             _autostartHint.Location = new Point(Theme.S(44), Theme.S(104));
-            _ffmpeg.Location = new Point(Theme.S(16), Theme.S(134));
+            _ffmpeg.Location = new Point(Theme.S(16), Theme.S(132));
             c.Controls.AddRange(new Control[] { _tray, _autostart, _autostartHint, _ffmpeg, _openLog, _openData });
 
             _tray.CheckedChanged += (s, e) => { _settings.MinimizeToTray = _tray.Checked; Save(); };
@@ -125,14 +129,6 @@ namespace scrlog.UI
                     MessageBox.Show(FindForm(), "Журнал работы пока пуст.", "Scrlog");
             };
             _openData.Click += (s, e) => JournalPage.OpenFolder(AppSettings.DataFolder);
-        }
-
-        private static void AddRow(Card card, string label, Control input, int y)
-        {
-            var l = Theme.MakeLabel(label, Theme.Font(10.5f), Theme.Label);
-            l.Location = new Point(Theme.S(14), Theme.S(y + 7));
-            card.Controls.Add(l);
-            card.Controls.Add(input);
         }
 
         private void LoadValues()
@@ -160,10 +156,10 @@ namespace scrlog.UI
             bool forAll = Autostart.EnabledForAllUsers;
             _autostart.Checked = forAll || Autostart.EnabledForCurrentUser;
             _autostart.Enabled = !forAll;
-            _autostartHint.Text = forAll ? "Включено установщиком для всех пользователей" : "";
+            _autostartHint.Text = forAll ? AutostartHintText : "";
 
             bool hasFfmpeg = File.Exists(Recorder.FfmpegPath);
-            _ffmpeg.Text = hasFfmpeg ? "ffmpeg: найден" : "ffmpeg: не найден — запись невозможна";
+            _ffmpeg.Text = hasFfmpeg ? "ffmpeg: найден" : FfmpegMissingText;
             _ffmpeg.ForeColor = hasFfmpeg ? Theme.Label : Theme.Red;
             UpdateQualityHint();
         }
@@ -174,15 +170,56 @@ namespace scrlog.UI
             SettingsChanged?.Invoke();
         }
 
+        // ---------- Раскладка ----------
+
+        private static readonly int ComboWidth = Theme.S(170);
+
+        private int InputX => InputColumn(_pcNameLabel, _qualityLabel, _fpsLabel, _segmentLabel);
+
+        private int QualityHintWidth => Enum.GetValues(typeof(VideoQuality)).Cast<VideoQuality>()
+            .Max(q => { var size = Recorder.GetOutputSize(q); return TextWidth($"видео {size.Width} x {size.Height}", _qualityHint.Font); });
+
+        public override int MinimumContentWidth => Pad * 2 + new[]
+        {
+            InputX + ComboWidth + Theme.S(12) + QualityHintWidth + Theme.S(16),
+            _clicks.Right + Theme.S(16),
+            _tray.Right + Theme.S(16),
+            _autostart.Right + Theme.S(16),
+            _autostartHint.Left + TextWidth(AutostartHintText, _autostartHint.Font) + Theme.S(16),
+            _ffmpeg.Left + TextWidth(FfmpegMissingText, _ffmpeg.Font) + Theme.S(16),
+            Theme.S(16) + ButtonWidth(_openLog) + Theme.S(8) + ButtonWidth(_openData) + Theme.S(16)
+        }.Max();
+
+        // Страница прокручивается, поэтому высоту окна не ограничивает
+        public override int MinimumContentHeight => 0;
+
         protected override void OnLayout(LayoutEventArgs e)
         {
             base.OnLayout(e);
-            int pad = Theme.S(24);
-            int width = ClientSize.Width - pad * 2;
-            _recordCard.SetBounds(pad, Theme.S(22), width, Theme.S(280));
-            _appCard.SetBounds(pad, _recordCard.Bottom + Theme.S(12), width, Theme.S(176));
-            _openLog.SetBounds(Theme.S(16), Theme.S(126) + Theme.S(32), Theme.S(150), Theme.S(32));
-            _openData.SetBounds(_openLog.Right + Theme.S(8), _openLog.Top, Theme.S(150), Theme.S(32));
+            int width = ClientSize.Width - Pad * 2;
+            int offset = AutoScrollPosition.Y;
+
+            // Запись
+            int x = InputX;
+            int y = Theme.S(50);
+            PlaceRow(_pcNameLabel, _pcName, x, y, Math.Max(Theme.S(140), Math.Min(Theme.S(320), width - x - Theme.S(16))));
+            PlaceRow(_qualityLabel, _quality, x, y += RowStep, ComboWidth);
+            _qualityHint.Location = new Point(_quality.Right + Theme.S(12), _qualityLabel.Top + Theme.S(2));
+            PlaceRow(_fpsLabel, _fps, x, y += RowStep, Theme.S(76));
+            PlaceRow(_segmentLabel, _segment, x, y += RowStep, Theme.S(76));
+            // Длинная подсказка переносится по ширине карточки
+            _applyHint.MaximumSize = new Size(Math.Max(Theme.S(100), width - Theme.S(32)), 0);
+            _recordCard.SetBounds(Pad, ContentTop + offset, width, _applyHint.Bottom + Theme.S(16));
+
+            // Программа
+            int buttonsTop = _ffmpeg.Bottom + Theme.S(14);
+            _openLog.SetBounds(Theme.S(16), buttonsTop, ButtonWidth(_openLog), RowHeight);
+            _openData.SetBounds(_openLog.Right + Theme.S(8), buttonsTop, ButtonWidth(_openData), RowHeight);
+            _appCard.SetBounds(Pad, _recordCard.Bottom + Gap, width, _openLog.Bottom + Theme.S(16));
+
+            var scrollSize = new Size(0, _appCard.Bottom - offset + Pad);
+            if (AutoScrollMinSize != scrollSize)
+                AutoScrollMinSize = scrollSize;
         }
     }
 }

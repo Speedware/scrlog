@@ -9,10 +9,11 @@ using System.Windows.Forms;
 
 namespace scrlog.UI
 {
-    public class JournalPage : UserControl
+    public class JournalPage : Page
     {
         private readonly AppSettings _settings;
         private readonly Card _card = new Card();
+        private readonly Label _title;
         private readonly Label _summary = Theme.MakeLabel("", Theme.Font(10f), Theme.Muted);
         private readonly ActionButton _refresh = new ActionButton { Text = "Обновить", Glyph = Theme.Glyph.Refresh, FillColor = Theme.Card, TextColor = Theme.Text, GlyphSize = 10f, Font = Theme.Semibold(10f) };
         private readonly ActionButton _openFolder = new ActionButton { Text = "Открыть папку", Glyph = Theme.Glyph.Folder, FillColor = Theme.Accent, GlyphSize = 10f, Font = Theme.Semibold(10f) };
@@ -31,10 +32,10 @@ namespace scrlog.UI
         public JournalPage(AppSettings settings)
         {
             _settings = settings;
-            BackColor = Theme.Background;
 
-            _card.AddTitle("Журнал записей");
-            _summary.Location = new Point(Theme.S(16), Theme.S(40));
+            _title = _card.AddTitle("Журнал записей");
+            _summary.AutoSize = false;
+            _summary.AutoEllipsis = true;
 
             _list.Columns.Add("Файл", Theme.S(240));
             _list.Columns.Add("Начало", Theme.S(130));
@@ -165,16 +166,22 @@ namespace scrlog.UI
             }
         }
 
+        public override int MinimumContentWidth => Pad * 2 + _title.Left + TextWidth(_title) + Theme.S(24) +
+            ButtonWidth(_refresh) + Theme.S(8) + ButtonWidth(_openFolder) + Theme.S(16);
+
+        public override int MinimumContentHeight => ContentTop + Theme.S(260) + Pad;
+
         protected override void OnLayout(LayoutEventArgs e)
         {
             base.OnLayout(e);
-            int pad = Theme.S(24);
-            _card.SetBounds(pad, Theme.S(22), ClientSize.Width - pad * 2, ClientSize.Height - Theme.S(22) - pad);
+            _card.SetBounds(Pad, ContentTop, ClientSize.Width - Pad * 2, ClientSize.Height - ContentTop - Pad);
 
             int right = _card.Width - Theme.S(16);
-            _openFolder.SetBounds(right - Theme.S(150), Theme.S(16), Theme.S(150), Theme.S(34));
-            _refresh.SetBounds(_openFolder.Left - Theme.S(8) - Theme.S(120), Theme.S(16), Theme.S(120), Theme.S(34));
-            _summary.MaximumSize = new Size(Math.Max(10, _refresh.Left - Theme.S(24)), 0);
+            int openWidth = ButtonWidth(_openFolder);
+            int refreshWidth = ButtonWidth(_refresh);
+            _openFolder.SetBounds(right - openWidth, Theme.S(16), openWidth, Theme.S(34));
+            _refresh.SetBounds(_openFolder.Left - Theme.S(8) - refreshWidth, Theme.S(16), refreshWidth, Theme.S(34));
+            _summary.SetBounds(Theme.S(16), Theme.S(42), Math.Max(0, _card.Width - Theme.S(32)), Theme.S(20));
 
             int top = Theme.S(66);
             _list.SetBounds(Theme.S(12), top, _card.Width - Theme.S(24), _card.Height - top - Theme.S(12));
