@@ -1,6 +1,6 @@
 using System;
 using System.Drawing;
-using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -23,7 +23,7 @@ namespace scrlog.UI
         private readonly NotifyIcon _tray = new NotifyIcon();
         private readonly ToolStripMenuItem _trayToggle = new ToolStripMenuItem();
         private readonly Icon _appIcon;
-        private readonly Icon _recordingIcon;
+        private readonly Icon _idleIcon;
         private MouseHook _mouseHook;
         private bool _exiting;
         private bool _trayHintShown;
@@ -44,7 +44,7 @@ namespace scrlog.UI
             MinimumSize = SizeFromClientSize(new Size(Theme.S(780), Theme.S(500)));
 
             _appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application;
-            _recordingIcon = MakeRecordingIcon(_appIcon);
+            _idleIcon = MakeIdleIcon(_appIcon);
             Icon = _appIcon;
 
             _home = new HomePage(settings, recorder, scheduler);
@@ -124,7 +124,7 @@ namespace scrlog.UI
 
         private void UpdateTray()
         {
-            _tray.Icon = _recorder.IsRecording ? _recordingIcon : _appIcon;
+            _tray.Icon = _recorder.IsRecording ? _appIcon : _idleIcon;
             _tray.Text = _recorder.IsRecording ? "Scrlog — идёт запись" : "Scrlog — запись остановлена";
             _trayToggle.Text = _recorder.IsRecording ? "Остановить запись" : "Начать запись";
         }
@@ -220,20 +220,25 @@ namespace scrlog.UI
             base.WndProc(ref m);
         }
 
-        private static Icon MakeRecordingIcon(Icon source)
+        /// <summary>Серая версия иконки для трея, пока запись остановлена.</summary>
+        private static Icon MakeIdleIcon(Icon source)
         {
             int size = SystemInformation.SmallIconSize.Width;
             using (var bmp = new Bitmap(size, size))
             {
                 using (var g = Graphics.FromImage(bmp))
+                using (var color = new Icon(source, size, size).ToBitmap())
+                using (var attributes = new ImageAttributes())
                 {
-                    g.SmoothingMode = SmoothingMode.AntiAlias;
-                    g.DrawIcon(new Icon(source, size, size), new Rectangle(0, 0, size, size));
-                    float dot = size * 0.5f;
-                    using (var border = new SolidBrush(Color.White))
-                        g.FillEllipse(border, size - dot - 1, size - dot - 1, dot + 1, dot + 1);
-                    using (var red = new SolidBrush(Theme.Red))
-                        g.FillEllipse(red, size - dot, size - dot, dot - 1, dot - 1);
+                    attributes.SetColorMatrix(new ColorMatrix(new[]
+                    {
+                        new[] { 0.3f, 0.3f, 0.3f, 0, 0 },
+                        new[] { 0.59f, 0.59f, 0.59f, 0, 0 },
+                        new[] { 0.11f, 0.11f, 0.11f, 0, 0 },
+                        new[] { 0f, 0, 0, 1, 0 },
+                        new[] { 0f, 0, 0, 0, 1 }
+                    }));
+                    g.DrawImage(color, new Rectangle(0, 0, size, size), 0, 0, size, size, GraphicsUnit.Pixel, attributes);
                 }
                 // Icon.FromHandle не владеет хэндлом — клонируем, чтобы не держать GDI-ресурс
                 IntPtr hIcon = bmp.GetHicon();
