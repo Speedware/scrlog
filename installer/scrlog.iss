@@ -32,6 +32,8 @@ SolidCompression=yes
 WizardStyle=modern
 ; Закрываем запущенный Scrlog перед обновлением (программа корректно завершит запись)
 CloseApplications=yes
+; Просим Explorer обновить иконки после установки (иначе ярлык может показывать старую из кэша)
+ChangesAssociations=yes
 
 [Languages]
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
@@ -51,14 +53,16 @@ Name: "{commonappdata}\Scrlog"; Permissions: users-modify
 Name: "{sd}\ScreenLogs"; Permissions: users-modify; Flags: uninsneveruninstall
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; IconFilename: "{app}\{#AppExe}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; IconFilename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Registry]
 Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Scrlog"; \
   ValueData: """{app}\{#AppExe}"" --minimized"; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
+; Сброс кэша иконок Windows 10/11
+Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runhidden skipifdoesntexist runasoriginaluser
 Filename: "{app}\{#AppExe}"; Description: "Запустить {#AppName}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [UninstallRun]

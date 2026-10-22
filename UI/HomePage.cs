@@ -72,6 +72,7 @@ namespace scrlog.UI
             _timer.Tick += (s, e) => RefreshStatus();
             _timer.Start();
             RefreshStatus();
+            FinishInit();
         }
 
         private void BuildStatusCard()
@@ -309,9 +310,8 @@ namespace scrlog.UI
 
         public override int MinimumContentHeight => ContentTop + StatusHeight + Gap + BottomHeight + Pad;
 
-        protected override void OnLayout(LayoutEventArgs e)
+        protected override void LayoutContent()
         {
-            base.OnLayout(e);
             int width = ClientSize.Width - Pad * 2;
 
             // Статус: блок с ПК справа сжимается до минимума, левая часть не перекрывается

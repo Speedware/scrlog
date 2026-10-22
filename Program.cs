@@ -32,12 +32,22 @@ namespace scrlog
                 var settings = AppSettings.Load();
                 Log.Write($"Scrlog {Application.ProductVersion} запущен");
 
-                using (var recorder = new Recorder())
-                using (var scheduler = new RecordingScheduler(recorder, () => settings))
+                try
                 {
-                    Application.Run(new MainForm(settings, recorder, scheduler, startHidden));
-                    scheduler.Dispose();
-                    recorder.Stop();
+                    using (var recorder = new Recorder())
+                    using (var scheduler = new RecordingScheduler(recorder, () => settings))
+                    {
+                        Application.Run(new MainForm(settings, recorder, scheduler, startHidden));
+                        scheduler.Dispose();
+                        recorder.Stop();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Без этого ошибка при запуске выглядит как «программа просто не открылась»
+                    Log.Write($"Ошибка запуска: {ex}");
+                    MessageBox.Show($"Не удалось запустить Scrlog:\n\n{ex.Message}\n\nПодробности: {AppSettings.DataFolder}\\scrlog.log",
+                        "Scrlog", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
 
                 Log.Write("Scrlog завершён");

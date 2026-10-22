@@ -16,11 +16,33 @@ namespace scrlog.UI
         protected static readonly int Gap = Theme.S(12);
         protected static readonly int RowHeight = Theme.S(32);
 
+        private bool _ready;
+
         protected Page()
         {
             BackColor = Theme.Background;
             DoubleBuffered = true;
         }
+
+        /// <summary>
+        /// Вызывается в конце конструктора страницы. До этого раскладка не выполняется:
+        /// WinForms может запросить её раньше (например, при установке AutoScroll),
+        /// когда элементы ещё не созданы.
+        /// </summary>
+        protected void FinishInit()
+        {
+            _ready = true;
+            PerformLayout();
+        }
+
+        protected sealed override void OnLayout(LayoutEventArgs e)
+        {
+            base.OnLayout(e);
+            if (_ready)
+                LayoutContent();
+        }
+
+        protected abstract void LayoutContent();
 
         /// <summary>Ширина, меньше которой элементы начнут перекрываться.</summary>
         public abstract int MinimumContentWidth { get; }

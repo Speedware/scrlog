@@ -56,6 +56,7 @@ namespace scrlog.UI
             BuildAppCard();
             Controls.AddRange(new Control[] { _recordCard, _appCard });
             LoadValues();
+            FinishInit();
         }
 
         public static string QualityName(VideoQuality quality)
@@ -193,9 +194,8 @@ namespace scrlog.UI
         // Страница прокручивается, поэтому высоту окна не ограничивает
         public override int MinimumContentHeight => 0;
 
-        protected override void OnLayout(LayoutEventArgs e)
+        protected override void LayoutContent()
         {
-            base.OnLayout(e);
             int width = ClientSize.Width - Pad * 2;
             int offset = AutoScrollPosition.Y;
 

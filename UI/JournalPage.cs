@@ -56,6 +56,7 @@ namespace scrlog.UI
 
             _card.Controls.AddRange(new Control[] { _summary, _refresh, _openFolder, _list });
             Controls.Add(_card);
+            FinishInit();
         }
 
         protected override void OnVisibleChanged(EventArgs e)
@@ -171,9 +172,8 @@ namespace scrlog.UI
 
         public override int MinimumContentHeight => ContentTop + Theme.S(260) + Pad;
 
-        protected override void OnLayout(LayoutEventArgs e)
+        protected override void LayoutContent()
         {
-            base.OnLayout(e);
             _card.SetBounds(Pad, ContentTop, ClientSize.Width - Pad * 2, ClientSize.Height - ContentTop - Pad);
 
             int right = _card.Width - Theme.S(16);
