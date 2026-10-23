@@ -17,9 +17,11 @@
 Релиз: поставить тег с версией — установщик соберётся и будет приложен к GitHub Release.
 
 ```sh
-git tag v2.0.0
-git push origin v2.0.0
+git tag v2.0.3
+git push origin v2.0.3
 ```
 
-Локально (Windows): `dotnet build -c Release -o publish`, положить `ffmpeg.exe` в `publish\`,
-затем `ISCC.exe /DAppVersion=2.0.0 installer\scrlog.iss`.
+Установщик один для 32- и 64-битной Windows: он сам ставит ffmpeg нужной разрядности.
+
+Локально (Windows): `dotnet build -c Release -o publish`, положить 64-битный `ffmpeg.exe` в `ffmpeg\x64\`
+и 32-битный в `ffmpeg\x86\`, затем `ISCC.exe /DAppVersion=2.0.3 installer\scrlog.iss`.

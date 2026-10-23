@@ -25,8 +25,9 @@ namespace scrlog
 
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                Application.ThreadException += (s, e) => Log.Write($"Ошибка UI: {e.Exception}");
-                AppDomain.CurrentDomain.UnhandledException += (s, e) => Log.Write($"Необработанная ошибка: {e.ExceptionObject}");
+                Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+                Application.ThreadException += (s, e) => ShowError("Ошибка в работе Scrlog", e.Exception);
+                AppDomain.CurrentDomain.UnhandledException += (s, e) => ShowError("Критическая ошибка Scrlog", e.ExceptionObject as Exception);
 
                 bool startHidden = args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
                 var settings = AppSettings.Load();
@@ -44,13 +45,27 @@ namespace scrlog
                 }
                 catch (Exception ex)
                 {
-                    // Без этого ошибка при запуске выглядит как «программа просто не открылась»
-                    Log.Write($"Ошибка запуска: {ex}");
-                    MessageBox.Show($"Не удалось запустить Scrlog:\n\n{ex.Message}\n\nПодробности: {AppSettings.DataFolder}\\scrlog.log",
-                        "Scrlog", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    ShowError("Не удалось запустить Scrlog", ex);
                 }
 
                 Log.Write("Scrlog завершён");
+            }
+        }
+
+        /// <summary>
+        /// Пишет ошибку в журнал и показывает её. Без окна сбой выглядит как
+        /// «программа просто не открылась» — понять причину на кассе невозможно.
+        /// </summary>
+        private static void ShowError(string title, Exception ex)
+        {
+            Log.Write($"{title}: {ex}");
+            try
+            {
+                MessageBox.Show($"{title}:\n\n{ex?.GetType().Name}: {ex?.Message}\n\nПодробности в журнале:\n{AppSettings.DataFolder}\\scrlog.log",
+                    "Scrlog", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            catch
+            {
             }
         }
 

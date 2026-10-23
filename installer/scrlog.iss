@@ -1,6 +1,7 @@
 ; Установщик Scrlog. Собирается в GitHub Actions (.github/workflows/build.yml):
 ;   ISCC.exe /DAppVersion=2.0.0 installer\scrlog.iss
-; Ожидает собранную программу и ffmpeg.exe в папке ..\publish
+; Ожидает собранную программу в ..\publish и ffmpeg.exe в ..\ffmpeg\x64 и ..\ffmpeg\x86.
+; Установщик один на обе архитектуры: на 64-битной Windows ставится 64-битный ffmpeg, на 32-битной — 32-битный.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -20,7 +21,7 @@ DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
-ArchitecturesAllowed=x64compatible
+ArchitecturesAllowed=x86compatible x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir=Output
@@ -45,7 +46,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "..\publish\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\publish\{#AppExe}.config"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\publish\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\ffmpeg\x64\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion; Check: Is64BitInstallMode
+Source: "..\ffmpeg\x86\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion; Check: not Is64BitInstallMode
 
 [Dirs]
 ; Настройки и журнал общие для всех пользователей ПК
